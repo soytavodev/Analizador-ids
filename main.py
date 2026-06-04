@@ -72,6 +72,10 @@ LOGS A ANALIZAR:
         datos_respuesta = respuesta.json()
         texto_generado = datos_respuesta.get("answer", "").strip()
         
+        print("\n--- 🕵️ DEBUG: RESPUESTA CRUDA DE LA IA ---")
+        print(texto_generado)
+        print("------------------------------------------\n")
+        
         # Limpiamos el texto por si el modelo devuelve markdown fuera del JSON
         inicio = texto_generado.find("{")
         fin = texto_generado.rfind("}") + 1
