@@ -26,6 +26,7 @@ Analizador-ids/
 ├── config.py            # Validador y cargador seguro de credenciales
 ├── inyectar.py          # Script simulador de amenazas (Red Team)
 └── main.py              # Orquestador del análisis y generador de reportes (Blue Team)
+```
 
 ## ⚙️ Características Principales
 Análisis Heurístico Contextual: Evalúa el peligro de una URL basándose en la intención de la petición, no solo en coincidencias exactas de texto.
