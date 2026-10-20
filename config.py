@@ -12,4 +12,4 @@ except ImportError:
 # Valores por defecto pensados para funcionar en local sin configurar nada
 DB_PATH = os.getenv("DB_PATH", "./analytics.db")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-MODELO = os.getenv("MODELO", "qwen2.5:3b")
+MODELO = os.getenv("MODELO", "qwen2.5:1.5b")

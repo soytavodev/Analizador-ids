@@ -9,6 +9,23 @@ Tiene dos formas de analizar:
 
 Con `--modo ambos` se ejecutan los dos y se compara qué detecta cada uno: las reglas solo ven patrones, y la IA intenta entender la intención de la petición.
 
+## Resultados en mi prueba
+
+Con la base de datos de ejemplo (40 visitas normales y 7 ataques), en una máquina virtual sin tarjeta gráfica y con el modelo `qwen2.5:1.5b` (unos 1 GB):
+
+| Modo | Ataques detectados (de 7) | Falsos positivos | Tiempo |
+| --- | --- | --- | --- |
+| Reglas | 7 | 0 | instantáneo |
+| IA, todos los registros en un solo prompt | 0 | 4 | 1 min 30 s |
+| IA, por lotes de 8 registros | 4 | 1 | 3 min 40 s |
+
+Lo que aprendí:
+- Un modelo pequeño se pierde con muchos registros a la vez. Mandarlos **por lotes** pasó de 0 a 4 aciertos.
+- El modelo a veces devuelve registros que no existen, así que el programa **descarta cualquier `id_log` que no estuviera en el lote** enviado.
+- La IA acertó las inyecciones SQL (también la codificada en la URL), el XSS y el path traversal, pero no vio los escaneos de bots (`/wp-login.php`, `/.env`, `/phpmyadmin/`), que las reglas detectan sin problema. Por eso tiene sentido usar los dos: las reglas para lo conocido y la IA como segunda opinión.
+
+Los resultados de la IA pueden variar un poco entre ejecuciones.
+
 Empezó como un prototipo durante mis prácticas en empresa (FCT). Esta versión funciona sola, con una base de datos de ejemplo y sin depender de ningún servidor externo.
 
 ## Ejemplo
@@ -58,9 +75,9 @@ python3 -m unittest             # pruebas del detector por reglas
 
 ### Modo IA (opcional)
 
-1. Instala [Ollama](https://ollama.com/download) y descarga un modelo. Por defecto se usa `qwen2.5:3b`, que ocupa unos 2 GB y funciona sin tarjeta gráfica (aunque tarda unos minutos):
+1. Instala [Ollama](https://ollama.com/download) y descarga un modelo. Por defecto se usa `qwen2.5:1.5b`, que ocupa unos 1 GB y funciona sin tarjeta gráfica (tarda unos minutos):
    ```bash
-   ollama pull qwen2.5:3b
+   ollama pull qwen2.5:1.5b
    ```
 2. Instala la librería `requests` si no la tienes:
    ```bash
@@ -70,6 +87,7 @@ python3 -m unittest             # pruebas del detector por reglas
    ```bash
    python3 main.py --modo ia
    python3 main.py --modo ambos
+   python3 main.py --modo ia --lote 5 --debug   # lotes más pequeños y respuesta cruda de la IA
    ```
 
 Para cambiar el modelo, la dirección de Ollama o la ruta de la base de datos, copia `.env.example` como `.env` y edítalo.

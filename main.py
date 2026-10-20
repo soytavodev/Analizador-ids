@@ -70,10 +70,11 @@ LOGS A ANALIZAR:
         "prompt": prompt,
         "stream": False,
         "format": "json",
-        "options": {"num_ctx": 8192, "temperature": 0.1},
+        "options": {"num_ctx": 4096, "temperature": 0.1},
     }
 
-    print(f"🤖 Analizando con {MODELO} en {OLLAMA_URL} (sin tarjeta gráfica puede tardar unos minutos)...")
+    if debug:
+        print(f"🤖 Consultando a {MODELO} en {OLLAMA_URL}...")
 
     try:
         respuesta = requests.post(f"{OLLAMA_URL}/api/generate", json=payload, timeout=900)
@@ -103,6 +104,30 @@ LOGS A ANALIZAR:
     except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
         print(f"❌ Error con la respuesta de la IA: {e}")
         return None
+
+
+def analizar_por_lotes(logs, tam_lote, debug=False):
+    """Envía los registros a la IA en grupos pequeños y junta los resultados.
+
+    Un modelo pequeño se pierde con muchos registros en un mismo prompt, así que
+    se analizan por lotes. Además se descarta cualquier amenaza cuyo id_log no
+    esté en el lote enviado: el modelo a veces se inventa registros.
+    """
+    amenazas = []
+    lotes = [logs[i:i + tam_lote] for i in range(0, len(logs), tam_lote)]
+    for n, lote in enumerate(lotes, start=1):
+        print(f"   Lote {n}/{len(lotes)}...")
+        texto = "".join(f"[ID: {log[0]}] IP: {log[1]} | RUTA: {log[2]} | FECHA: {log[3]}\n" for log in lote)
+        resultado = analizar_logs_ia(texto, debug=debug)
+        if resultado is None:
+            return None
+        ids_lote = {log[0] for log in lote}
+        for a in resultado.get("amenazas_detectadas", []):
+            if a.get("id_log") in ids_lote:
+                amenazas.append(a)
+            elif debug:
+                print(f"   Descartada: la IA devolvió un id_log que no estaba en el lote ({a.get('id_log')})")
+    return {"analisis_completado": True, "amenazas_detectadas": amenazas}
 
 
 def imprimir_reporte(titulo, resultado):
@@ -145,6 +170,7 @@ def main():
     parser = argparse.ArgumentParser(description="Analizador IDS: detecta ataques en logs de acceso web.")
     parser.add_argument("--modo", choices=["reglas", "ia", "ambos"], default="reglas")
     parser.add_argument("--limite", type=int, default=50, help="Número de registros recientes a analizar")
+    parser.add_argument("--lote", type=int, default=8, help="Registros por consulta a la IA (los modelos pequeños fallan con muchos a la vez)")
     parser.add_argument("--debug", action="store_true", help="Muestra la respuesta cruda de la IA")
     args = parser.parse_args()
 
@@ -162,10 +188,7 @@ def main():
         imprimir_reporte("REGLAS", res_reglas)
 
     if args.modo in ("ia", "ambos"):
-        logs_texto = "".join(
-            f"[ID: {log[0]}] IP: {log[1]} | RUTA: {log[2]} | FECHA: {log[3]}\n" for log in logs_crudos
-        )
-        res_ia = analizar_logs_ia(logs_texto, debug=args.debug)
+        res_ia = analizar_por_lotes(logs_crudos, args.lote, debug=args.debug)
         imprimir_reporte(f"IA ({MODELO})", res_ia)
 
     if args.modo == "ambos":
