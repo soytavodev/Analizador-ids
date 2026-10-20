@@ -1,2 +1,4 @@
-requests==2.31.0
-python-dotenv==1.0.1
+# requests: solo para el modo IA
+requests>=2.31
+# python-dotenv: opcional, para leer el archivo .env
+python-dotenv>=1.0

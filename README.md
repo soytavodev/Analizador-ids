@@ -1,64 +1,95 @@
-# Analizador de Seguridad IDS (Prototipo) 🛡️🤖
+# Analizador IDS
 
-## 📋 Descripción
-Prototipo aislado de un **Sistema de Detección de Intrusos (IDS)** con enfoque *Blue Team*. Utiliza Inteligencia Artificial (LLMs ejecutados localmente) para auditar logs de tráfico web desde una base de datos relacional y detectar patrones anómalos, escaneos de bots y ataques directos (SQLi, XSS, Path Traversal).
+Prototipo de **sistema de detección de intrusos** (IDS) para una web. Lee los últimos accesos guardados en una base de datos SQLite y busca intentos de ataque: SQL Injection, XSS, Path Traversal y escaneos de bots.
 
-A diferencia de los IDS tradicionales basados en firmas estáticas, esta herramienta comprende el contexto real de las peticiones HTTP utilizando técnicas de **Few-Shot Prompting**, reduciendo los falsos positivos y emitiendo reportes JSON altamente estructurados.
+Tiene dos formas de analizar:
 
----
+- **Por reglas:** busca patrones conocidos de ataque (firmas), como hacen los IDS clásicos. Es rápido y no necesita nada más que Python.
+- **Con IA local:** envía los registros a un modelo de lenguaje que se ejecuta en tu ordenador con [Ollama](https://ollama.com), usando *few-shot prompting* (ejemplos de tráfico normal y de ataques dentro del propio prompt). El modelo devuelve un informe en JSON.
 
-## 🛠️ Stack Tecnológico
-* **Lenguaje:** Python 3.x
-* **Inteligencia Artificial:** Ollama API (`qwen3:14b`)
-* **Persistencia:** SQLite (`analytics.db`)
-* **Seguridad y Entorno:** `python-dotenv` (Gestión segura de credenciales en `.env`)
-* **Técnicas:** Prompt Engineering, Few-Shot Learning, Inyección de logs simulados.
+Con `--modo ambos` se ejecutan los dos y se compara qué detecta cada uno: las reglas solo ven patrones, y la IA intenta entender la intención de la petición.
 
----
+Empezó como un prototipo durante mis prácticas en empresa (FCT). Esta versión funciona sola, con una base de datos de ejemplo y sin depender de ningún servidor externo.
 
-## 🏗️ Arquitectura y Seguridad
-El proyecto está diseñado bajo buenas prácticas de ingeniería, aislando la lógica de negocio de las credenciales sensibles.
+## Ejemplo
+
+```text
+$ python3 crear_bd_ejemplo.py && python3 inyectar.py && python3 main.py
+✅ Base de datos creada en ./analytics.db con 40 visitas normales.
+✅ 7 ataques inyectados.
+🛡️ Iniciando Analizador IDS...
+📊 Se extrajeron 47 registros.
+
+==================================================
+🚨 REPORTE DE SEGURIDAD · REGLAS
+==================================================
+⚠️ 7 amenazas detectadas:
+
+🛑 IP          : 198.51.100.77
+📄 Log ID      : 43
+🎯 Ruta        : /buscar.php?q=%27%20UNION%20SELECT%20user,password%20FROM%20users--
+🔪 Tipo        : SQL Injection
+🔥 Gravedad    : Alta
+🛡️ Recomendado : Bloquear IP y usar consultas preparadas
+...
+```
+
+## Cómo funciona
+
+- `crear_bd_ejemplo.py` crea `analytics.db` con 40 visitas normales a una tienda online inventada. Usa una semilla fija, así que siempre genera los mismos datos.
+- `inyectar.py` simula al atacante (*Red Team*): añade 7 peticiones maliciosas a la tabla `visitas`.
+- `main.py` hace de defensor (*Blue Team*): lee los últimos registros en modo solo lectura, los analiza y muestra el informe.
+- `reglas.py` contiene las firmas. Antes de comparar, decodifica la URL, porque los atacantes suelen codificarla (`%27` es una comilla) para esquivar filtros simples.
+- Todas las IP son de rangos privados o reservados para documentación (RFC 1918 y RFC 5737), no de personas o empresas reales.
+
+## Instalación y uso
+
+Necesitas Python 3.
+
+```bash
+git clone https://github.com/soytavodev/Analizador-ids.git
+cd Analizador-ids
+
+python3 crear_bd_ejemplo.py     # base de datos de ejemplo
+python3 inyectar.py             # ataques simulados
+python3 main.py                 # análisis por reglas
+python3 -m unittest             # pruebas del detector por reglas
+```
+
+### Modo IA (opcional)
+
+1. Instala [Ollama](https://ollama.com/download) y descarga un modelo. Por defecto se usa `qwen2.5:3b`, que ocupa unos 2 GB y funciona sin tarjeta gráfica (aunque tarda unos minutos):
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+2. Instala la librería `requests` si no la tienes:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Ejecuta el análisis con IA, o los dos modos para compararlos:
+   ```bash
+   python3 main.py --modo ia
+   python3 main.py --modo ambos
+   ```
+
+Para cambiar el modelo, la dirección de Ollama o la ruta de la base de datos, copia `.env.example` como `.env` y edítalo.
+
+## Estructura
 
 ```text
 Analizador-ids/
-├── .env                 # Variables de entorno y credenciales locales (Ignorado por Git)
-├── .env.example         # Plantilla base para configuración de variables
-├── config.py            # Validador y cargador seguro de credenciales
-├── inyectar.py          # Script simulador de amenazas (Red Team)
-└── main.py              # Orquestador del análisis y generador de reportes (Blue Team)
+├── config.py             # Configuración (con valores por defecto)
+├── crear_bd_ejemplo.py   # Base de datos de ejemplo
+├── inyectar.py           # Simulador de ataques
+├── main.py               # Analizador e informe
+├── reglas.py             # Detección por firmas
+└── tests/                # Pruebas con unittest
 ```
 
-## ⚙️ Características Principales
-Análisis Heurístico Contextual: Evalúa el peligro de una URL basándose en la intención de la petición, no solo en coincidencias exactas de texto.
+## Tecnologías
 
-Simulación de Ataques (Inyector): Incluye un script dedicado (inyectar.py) que escribe vectores de ataque reales directamente en la base de datos para probar la eficacia del escáner.
+Python, SQLite, expresiones regulares, Ollama (IA local) y `unittest`.
 
-Seguridad por Diseño: Todo el análisis se realiza de forma local o a través de un túnel cifrado hacia el servidor de IA, sin exponer los logs a APIs de terceros públicas.
+## Autor
 
-Salida Estructurada: Obliga a la IA a devolver exclusivamente un JSON válido, listo para ser consumido por un dashboard o un sistema de bloqueo de IPs (Firewall).
-
-## 🚀 Instalación y Uso
-Clonar el repositorio:
-
-Bash
-git clone [https://github.com/soytavodev/Analizador-ids.git](https://github.com/soytavodev/Analizador-ids.git)
-cd Analizador-ids
-Configurar el entorno virtual:
-
-Bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-Configurar credenciales:
-Copia el archivo de ejemplo y rellénalo con tus credenciales y rutas reales.
-
-Bash
-cp .env.example .env
-Simular un ataque (Opcional):
-
-Bash
-python3 inyectar.py
-Ejecutar la auditoría de seguridad:
-
-Bash
-python3 main.py
+Gustavo Delnardo · [GitHub](https://github.com/soytavodev) · [Web](https://gustavo-delnardo.vercel.app)
